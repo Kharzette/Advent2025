@@ -81,7 +81,7 @@ typedef struct	TestStuff_t
 typedef struct	JunxBox_t
 {
 	//3d position in the playground cube volume
-	vec3	mPos;
+	ivec3	mPos;
 	int		mID;
 
 	//circuit info if any
@@ -97,8 +97,8 @@ static JunxBox	*sCircuits[NUM_CIRCUITS];
 static int		sTotalConnexions;
 
 //temp space to hold nearest calcs
-int		sNearestIdx[NUM_CIRCUITS];
-float	sNearestDist[NUM_CIRCUITS];
+int			sNearestIdx[NUM_CIRCUITS];
+uint64_t	sNearestDist[NUM_CIRCUITS];
 
 //static forward decs
 static void	sSetupKeyBinds(Input *pInp);
@@ -207,7 +207,7 @@ int main(int argc, char *argv[])
 		for(int x=0;x < numLines;x++)
 		{
 			sNearestIdx[x]	=-1;
-			sNearestDist[x]	=FLT_MAX;
+			sNearestDist[x]	=UINT64_MAX;
 		}
 
 		for(int i=0;i < numLines;i++)
@@ -219,8 +219,8 @@ int main(int argc, char *argv[])
 				continue;
 			}
 
-			float	minDist	=FLT_MAX;
-			int		nearest	=-1;
+			uint64_t	minDist	=UINT64_MAX;
+			int			nearest	=-1;
 
 			//find the nearest junc boxen to i
 			//for test data brute force, but might
@@ -244,7 +244,7 @@ int main(int argc, char *argv[])
 //				double	abz	=pJunxBoxen[i].mPos[2] - pJunxBoxen[j].mPos[2];
 
 //				double	dist	=sqrt((abx * abx) + (aby * aby) + (abz * abz));
-				float	dist	=glm_vec3_distance(pJunxBoxen[i].mPos, pJunxBoxen[j].mPos);
+//				float	dist	=glm_vec3_distance(pJunxBoxen[i].mPos, pJunxBoxen[j].mPos);
 
 //				double	diff	=fabs(dist - dist2);
 
@@ -252,6 +252,13 @@ int main(int argc, char *argv[])
 //				{
 //					printf("Difference %f\n", diff);
 //				}
+
+				uint64_t	abx	=pJunxBoxen[i].mPos[0] - pJunxBoxen[j].mPos[0];
+				uint64_t	aby	=pJunxBoxen[i].mPos[1] - pJunxBoxen[j].mPos[1];
+				uint64_t	abz	=pJunxBoxen[i].mPos[2] - pJunxBoxen[j].mPos[2];
+				
+				//try squared distance
+				uint64_t	dist	=(abx * abx) + (aby * aby) + (abz * abz);
 
 				if(dist < minDist)
 				{
@@ -265,8 +272,8 @@ int main(int argc, char *argv[])
 		}
 
 		//connect shortest connexion
-		float	shortDist	=FLT_MAX;
-		int		shortIdx	=-1;
+		uint64_t	shortDist	=UINT64_MAX;
+		int			shortIdx	=-1;
 		for(int i=0;i < numLines;i++)
 		{
 			if(sNearestDist[i] < shortDist)
@@ -528,8 +535,13 @@ int main(int argc, char *argv[])
 			continue;
 		}
 
-		glm_vec3_copy(pJunxBoxen[i].mPos, pStarts[curRay]);
-		glm_vec3_copy(pJunxBoxen[pJunxBoxen[i].mConnectedTo].mPos, pEnds[curRay]);
+		//convert to floats
+		for(int j=0;j < 3;j++)
+		{
+			pStarts[curRay][j]	=pJunxBoxen[i].mPos[j];
+			pEnds[curRay][j]	=pJunxBoxen[pJunxBoxen[i].mConnectedTo].mPos[j];
+		}
+
 		glm_vec4_copy(pCircuitCols[pJunxBoxen[i].mCircuit], pCols[curRay]);
 
 		curRay++;
@@ -545,7 +557,11 @@ int main(int argc, char *argv[])
 	pStarts	=malloc(sizeof(vec3) * NUM_CIRCUITS);
 	for(int i=0;i < NUM_CIRCUITS;i++)
 	{
-		glm_vec3_copy(pJunxBoxen[i].mPos, pStarts[i]);
+		//convert to floats
+		for(int j=0;j < 3;j++)
+		{
+			pStarts[i][j]	=pJunxBoxen[i].mPos[j];
+		}
 	}
 
 	pTS->mpManyCubes	=PF_CreateManyCubes(pStarts, pCols, NUM_CIRCUITS, RAY_WIDTH * 4.0f, pTS->mpGD);
@@ -681,7 +697,7 @@ static void	sPrintCircuit(int cIdx)
 	JunxBox	*pTmp;
 	DL_FOREACH(sCircuits[cIdx], pTmp)
 	{
-		printf(" %4d:%5.0f,%5.0f,%5.0f", pTmp->mID,
+		printf(" %4d:%5d,%5d,%5d", pTmp->mID,
 			pTmp->mPos[0], pTmp->mPos[1], pTmp->mPos[2]);
 	}
 	printf("\n");
@@ -748,10 +764,10 @@ static void sTestCircuits()
 		JunxBox	*pTmp;
 		DL_COUNT(sCircuits[i], pTmp, cnt);
 
-		if(cnt < 2)
-		{
-			printf("Circuit %d has 1 item!\n", i);
-		}
+//		if(cnt < 2)
+//		{
+//			printf("Circuit %d has 1 item!\n", i);
+//		}
 
 		DL_FOREACH(sCircuits[i], pTmp)
 		{
@@ -780,10 +796,10 @@ static bool	sConnect(JunxBox *pJB, JunxBox *pTJB)
 		return	false;
 	}
 
-	printf("Connecting %5.0f,%5.0f,%5.0f to %5.0f,%5.0f,%5.0f dist: %.3f\n",
+	printf("Connecting %5d,%5d,%5d to %5d,%5d,%5d dist: %.3f\n",
 		pJB->mPos[0], pJB->mPos[1], pJB->mPos[2], 
 		pTJB->mPos[0], pTJB->mPos[1], pTJB->mPos[2],
-		glm_vec3_distance(pJB->mPos, pTJB->mPos));
+		glm_ivec3_distance(pJB->mPos, pTJB->mPos));
 
 	//see if both are already in a circuit
 	if(pJB->mCircuit != -1 && pTJB->mCircuit != -1)
@@ -843,15 +859,15 @@ static bool	sConnect(JunxBox *pJB, JunxBox *pTJB)
 
 static void	sGrabVec(const char *pLine, JunxBox *pJB)
 {
-	float	x	=atof(pLine);
+	int	x	=atoi(pLine);
 
 	char	*pComma	=strchr(pLine, ',');
 
-	float	y	=atof(pComma + 1);
+	int	y	=atoi(pComma + 1);
 
 	pComma	=strchr(pComma + 1, ',');
 
-	float	z	=atof(pComma + 1);
+	int	z	=atoi(pComma + 1);
 
 	pJB->mPos[0]	=x;
 	pJB->mPos[1]	=y;
