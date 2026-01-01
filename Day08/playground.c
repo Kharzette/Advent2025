@@ -35,6 +35,7 @@ Clay_Color	sClear	={	0xEA, 0xE2, 0xB7, 0x00	};
 //10 for test data, 1000 for real data
 #define	NUM_CONNEXIONS		1000
 #define	NUM_CIRCUITS		NUM_CONNEXIONS
+#define	MAX_OUT_CONNEXIONS	16
 #define	RESX				1280
 #define	RESY				720
 #define	MAX_UI_VERTS		(8192 * 3)	//bump this up as needed (debug needs alot)
@@ -86,7 +87,8 @@ typedef struct	JunxBox_t
 
 	//circuit info if any
 	int	mCircuit;
-	int	mConnectedTo;
+	int	mConnectedTo[MAX_OUT_CONNEXIONS];	//array of outgoing connexions
+	int	mNumOutConnex;
 
 	//list stuff
 	struct JunxBox_t	*next, *prev;
@@ -180,7 +182,8 @@ int main(int argc, char *argv[])
 
 		//set ID
 		pJunxBoxen[i].mID			=i;
-		pJunxBoxen[i].mConnectedTo	=-1;
+		memset(pJunxBoxen[i].mConnectedTo, -1, sizeof(int) * MAX_OUT_CONNEXIONS);
+		pJunxBoxen[i].mNumOutConnex	=0;
 
 		if(feof(pInp))
 		{
@@ -213,11 +216,11 @@ int main(int argc, char *argv[])
 		for(int i=0;i < numLines;i++)
 		{
 			//connected already?
-			if(pJunxBoxen[i].mConnectedTo >= 0)
-			{
+//			if(pJunxBoxen[i].mConnectedTo >= 0)
+//			{
 				//skip
-				continue;
-			}
+//				continue;
+//			}
 
 			uint64_t	minDist	=UINT64_MAX;
 			int			nearest	=-1;
@@ -232,8 +235,25 @@ int main(int argc, char *argv[])
 					continue;
 				}
 
-				//already connected to i?
-				if(pJunxBoxen[j].mConnectedTo == i)
+				//i already connected to j?
+				bool	bFound	=false;
+				for(int k=0;k < pJunxBoxen[i].mNumOutConnex;k++)
+				{
+					if(pJunxBoxen[i].mConnectedTo[k] == j)
+					{
+						bFound	=true;
+					}
+				}
+
+				//j already connected to i?
+				for(int k=0;k < pJunxBoxen[j].mNumOutConnex;k++)
+				{
+					if(pJunxBoxen[j].mConnectedTo[k] == i)
+					{
+						bFound	=true;
+					}
+				}
+				if(bFound)
 				{
 					continue;
 				}
@@ -292,15 +312,18 @@ int main(int argc, char *argv[])
 		//test connected in same circuit
 		for(int i=0;i < numLines;i++)
 		{
-			if(pJunxBoxen[i].mConnectedTo == -1)
+			if(pJunxBoxen[i].mNumOutConnex == 0)
 			{
 				continue;
 			}
 
-			if(pJunxBoxen[pJunxBoxen[i].mConnectedTo].mCircuit
-				!= pJunxBoxen[i].mCircuit)
+			for(int j=0;j < pJunxBoxen[i].mNumOutConnex;j++)
 			{
-				printf("Connected in different circuit! %d %d\n", i, pJunxBoxen[i].mConnectedTo);
+				if(pJunxBoxen[pJunxBoxen[i].mConnectedTo[j]].mCircuit
+					!= pJunxBoxen[i].mCircuit)
+				{
+					printf("Connected in different circuit! %d %d\n", i, pJunxBoxen[i].mConnectedTo[j]);
+				}
 			}
 		}
 
@@ -313,7 +336,7 @@ int main(int argc, char *argv[])
 	//test for unconnected junxboxen
 	for(int i=0;i < numLines;i++)
 	{
-		if(pJunxBoxen[i].mConnectedTo == -1)
+		if(pJunxBoxen[i].mNumOutConnex == 0)
 		{
 			printf("Box %d is unconnected!\n", i);
 		}
@@ -530,21 +553,23 @@ int main(int argc, char *argv[])
 
 	for(int i=0;i < NUM_CIRCUITS;i++)
 	{
-		if(pJunxBoxen[i].mConnectedTo < 0)
+		if(pJunxBoxen[i].mNumOutConnex == 0)
 		{
 			continue;
 		}
 
-		//convert to floats
-		for(int j=0;j < 3;j++)
+		for(int k=0;k < pJunxBoxen[i].mNumOutConnex;k++)
 		{
-			pStarts[curRay][j]	=pJunxBoxen[i].mPos[j];
-			pEnds[curRay][j]	=pJunxBoxen[pJunxBoxen[i].mConnectedTo].mPos[j];
+			//convert to floats
+			for(int j=0;j < 3;j++)
+			{
+				pStarts[curRay + k][j]	=pJunxBoxen[i].mPos[j];
+				pEnds[curRay + k][j]	=pJunxBoxen[pJunxBoxen[i].mConnectedTo[k]].mPos[j];
+			}
+			glm_vec4_copy(pCircuitCols[pJunxBoxen[i].mCircuit], pCols[curRay + k]);
 		}
 
-		glm_vec4_copy(pCircuitCols[pJunxBoxen[i].mCircuit], pCols[curRay]);
-
-		curRay++;
+		curRay	+=pJunxBoxen[i].mNumOutConnex;
 	}
 
 	pTS->mpManyRays	=PF_CreateManyRays(pStarts, pEnds, pCols, curRay, RAY_WIDTH, pTS->mpGD);
@@ -562,6 +587,8 @@ int main(int argc, char *argv[])
 		{
 			pStarts[i][j]	=pJunxBoxen[i].mPos[j];
 		}
+
+		glm_vec4_copy(pCircuitCols[pJunxBoxen[i].mCircuit], pCols[i]);
 	}
 
 	pTS->mpManyCubes	=PF_CreateManyCubes(pStarts, pCols, NUM_CIRCUITS, RAY_WIDTH * 4.0f, pTS->mpGD);
@@ -775,9 +802,12 @@ static void sTestCircuits()
 			{
 				printf("Bad mCircuit in circuit %d!\n", i);
 			}
-			if(pTmp->mConnectedTo == pTmp->mID)
+			for(int j=0;j < pTmp->mNumOutConnex;j++)
 			{
-				printf("Connected to self in circuit %d!", i);
+				if(pTmp->mConnectedTo[j] == pTmp->mID)
+				{
+					printf("Connected to self in circuit %d!", i);
+				}
 			}
 		}
 	}
@@ -786,14 +816,18 @@ static void sTestCircuits()
 static bool	sConnect(JunxBox *pJB, JunxBox *pTJB)
 {
 	//connect the passed in junxes
-	assert(pJB->mConnectedTo == -1);
+	//ensure space for another outgoing
+	assert(pJB->mNumOutConnex < (MAX_OUT_CONNEXIONS - 1));
 	
 	//see if already connected
-	if(pTJB->mConnectedTo == pJB->mID)
+	for(int i=0;i < pTJB->mNumOutConnex;i++)
 	{
-		//already connected!
-		printf("Boxen already hooxd up!\n");
-		return	false;
+		if(pTJB->mConnectedTo[i] == pJB->mID)
+		{
+			//already connected!
+			printf("Boxen already hooxd up!\n");
+			return	false;
+		}
 	}
 
 	printf("Connecting %5d,%5d,%5d to %5d,%5d,%5d dist: %.3f\n",
@@ -808,10 +842,11 @@ static bool	sConnect(JunxBox *pJB, JunxBox *pTJB)
 		if(pJB->mCircuit == pTJB->mCircuit)
 		{
 			//hoox
-			pJB->mConnectedTo	=pTJB->mID;
+			pJB->mConnectedTo[pJB->mNumOutConnex]	=pTJB->mID;
 
 			//the page says "nothing happens"
 			//does this mean this shouldn't count as a connexion?
+			pJB->mNumOutConnex++;
 			sTotalConnexions++;
 			return	true;
 		}
@@ -826,7 +861,8 @@ static bool	sConnect(JunxBox *pJB, JunxBox *pTJB)
 			sMergeCircuits(pTJB->mCircuit, pJB->mCircuit);
 		}
 
-		pJB->mConnectedTo	=pTJB->mID;
+		pJB->mConnectedTo[pJB->mNumOutConnex]	=pTJB->mID;
+		pJB->mNumOutConnex++;
 		sTotalConnexions++;
 		return	true;
 	}
@@ -852,7 +888,8 @@ static bool	sConnect(JunxBox *pJB, JunxBox *pTJB)
 		sAddToCircuit(freeCircuit, pJB);
 		sAddToCircuit(freeCircuit, pTJB);
 	}
-	pJB->mConnectedTo	=pTJB->mID;
+	pJB->mConnectedTo[pJB->mNumOutConnex]	=pTJB->mID;
+	pJB->mNumOutConnex++;
 	sTotalConnexions++;
 	return	true;
 }
