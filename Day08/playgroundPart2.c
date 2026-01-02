@@ -352,9 +352,15 @@ int main(int argc, char *argv[])
 		}
 	}
 
+	int64_t	x1	=pJunxBoxen[lastIndex].mPos[0];
+	int64_t	x2	=pJunxBoxen[lastIndex2].mPos[0];
+
+	int64_t	answer	=x1 * x2;
+
 	//answer
 	printf("The final two indexes connected are %d and %d\n", lastIndex, lastIndex2);
-	printf("The muld x of these is: %d\n", lastIndex * lastIndex2);
+	printf("The X coordinate of these are %lld and %lld\n", x1, x2);
+	printf("These muld: %lld\n", answer);
 
 	//store a bunch of vars in a struct
 	//for ref/modifying by input handlers
