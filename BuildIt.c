@@ -9,22 +9,48 @@ static bool	sBuildLib(const char *szPath, bool bCpp, bool bReBuild);
 static bool	sBuildCLib(const char *szPath);
 static bool	sBuildCppLib(const char *szPath);
 static bool	sBuildProgram(const char *szDir, const char *szFile, bool bReBuild);
-static int	sNeedsBuild(const char *szPath, bool bCpp);
+static int	sNeedsBuild(const char *szPath, const char *szFile, bool bCpp);
 static bool	sbIsC(const char *szFileName);
 static bool	sbIsCpp(const char *szFileName);
 static void	sStandardLibJunk_Add(Nob_Cmd *pCmd);
 
 
 //possible command line args:
+//--part-1
+//--part-2
 int	main(int argc, char **argv)
 {
 	//rebuild this program if need be
 	NOB_GO_REBUILD_URSELF(argc, argv);
 
-	if(!sBuildProgram("Day08", "playground", false))
+	//check command line args here?
+	bool	bPart1	=false;
+	if(argc > 1)
 	{
-		return	EXIT_FAILURE;
+		for(int i=0;i < argc;i++)
+		{
+			if(strncmp("--part-1", argv[i], 10) == 0)
+			{
+				bPart1	=true;
+			}
+		}
 	}
+
+	if(bPart1)
+	{
+		if(!sBuildProgram("Day08", "playground", false))
+		{
+			return	EXIT_FAILURE;
+		}
+	}
+	else
+	{
+		if(!sBuildProgram("Day08", "playgroundPart2", false))
+		{
+			return	EXIT_FAILURE;
+		}
+	}
+
 
 	return	EXIT_SUCCESS;
 }
@@ -91,7 +117,7 @@ static bool	sbIsCpp(const char *szFileName)
 }
 
 //returns < 0 if error, 0 if no build needed
-static int sNeedsBuild(const char *szPath, bool bCpp)
+static int sNeedsBuild(const char *szPath, const char *szFile, bool bCpp)
 {
 	//cd to dir
 	if(!nob_set_current_dir(szPath))
@@ -104,35 +130,9 @@ static int sNeedsBuild(const char *szPath, bool bCpp)
 	char	tmp[128];
 	sprintf(tmp, "../libs/lib%s.so", szPath);
 
-	//grab all the source files
+	//just one specified c file
     Nob_File_Paths	cFiles		={0};
-	Nob_File_Paths	allFiles	={0};
-	if(!nob_read_entire_dir(".", &allFiles))
-	{
-		printf("Something went wrong reading dir %s\n", szPath);
-		return	false;
-	}
-
-	//add all the source files
-	for(int i=0;i < allFiles.count;i++)
-	{
-		bool	bIsSource;
-		if(bCpp)
-		{
-			bIsSource	=sbIsCpp(allFiles.items[i]);
-		}
-		else
-		{
-			bIsSource	=sbIsC(allFiles.items[i]);
-		}
-
-		if(bIsSource)
-		{
-			nob_da_append(&cFiles, allFiles.items[i]);
-		}
-	}
-
-	nob_da_free(allFiles);
+	nob_da_append(&cFiles, szFile);
 
 	int	buildNeeded	=nob_needs_rebuild(tmp, cFiles.items, cFiles.count);
 
@@ -272,38 +272,23 @@ static bool	sBuildCLib(const char *szPath)
 	return	bWorked;
 }
 
-static bool	sBuildLib(const char *szPath, bool bCpp, bool bReBuild)
-{
-	if(!bReBuild)
-	{
-		int	needsBuild	=sNeedsBuild(szPath, bCpp);
-		if(needsBuild < 0)
-		{
-			return	false;	//error
-		}
-		else if(!needsBuild)
-		{
-			printf("No build needed for %s...\n", szPath);
-			return	true;	//no build needed
-		}
-	}
-
-	if(bCpp)
-	{
-		return	sBuildCppLib(szPath);
-	}
-	else
-	{
-		return	sBuildCLib(szPath);
-	}
-}
-
 //pass in the dir and program name (TestUI etc...)
 static bool	sBuildProgram(const char *szDir, const char *szFile, bool bReBuild)
 {
+	//cd to dir
+	if(!nob_set_current_dir(szDir))
+	{
+		printf("Something went wrong changing to test dir\n");
+		return	false;
+	}
+
+	//thing .c
+	char	tmp[128];
+	sprintf(tmp, "%s.c", szFile);
+	
 	if(!bReBuild)
 	{
-		int	needsBuild	=sNeedsBuild(szDir, false);
+		int	needsBuild	=nob_needs_rebuild1(szFile, tmp);
 		if(needsBuild < 0)
 		{
 			nob_set_current_dir("..");
@@ -319,31 +304,10 @@ static bool	sBuildProgram(const char *szDir, const char *szFile, bool bReBuild)
 
 	Nob_Cmd	progCmd	={0};
 
-	//cd to dir
-	if(!nob_set_current_dir(szDir))
-	{
-		printf("Something went wrong changing to test dir\n");
-		return	false;
-	}
-
 	sStandardProgJunk_Add(&progCmd);
 
-    Nob_File_Paths	cFiles		={0};
-
-	if(!nob_read_entire_dir(".", &cFiles))
-	{
-		printf("Something went wrong reading dir %s\n", szDir);
-		return	false;
-	}
-
-	//add all the .c files
-	for(int i=0;i < cFiles.count;i++)
-	{
-		if(sbIsC(cFiles.items[i]))
-		{
-			nob_cmd_append(&progCmd, cFiles.items[i]);
-		}
-	}
+	//add .c file
+	nob_cmd_append(&progCmd, tmp);
 
 	//more args
 	nob_cmd_append(&progCmd, "-std=gnu23", "-o");
