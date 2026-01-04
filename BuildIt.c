@@ -16,36 +16,52 @@ static void	sStandardLibJunk_Add(Nob_Cmd *pCmd);
 
 
 //possible command line args:
-//--part-1
-//--part-2
+//--dayxx-x
 int	main(int argc, char **argv)
 {
 	//rebuild this program if need be
 	NOB_GO_REBUILD_URSELF(argc, argv);
 
 	//check command line args here?
-	bool	bPart1	=false;
+	bool	bDay08p1	=false;
+	bool	bDay08p2	=false;
+	bool	bDay09p2	=false;
 	if(argc > 1)
 	{
 		for(int i=0;i < argc;i++)
 		{
-			if(strncmp("--part-1", argv[i], 10) == 0)
+			if(strncmp("--day08-1", argv[i], 9) == 0)
 			{
-				bPart1	=true;
+				bDay08p1	=true;
+			}
+			else if(strncmp("--day08-2", argv[i], 9) == 0)
+			{
+				bDay08p2	=true;
+			}
+			if(strncmp("--day09-2", argv[i], 9) == 0)
+			{
+				bDay09p2	=true;
 			}
 		}
 	}
 
-	if(bPart1)
+	if(bDay08p1)
 	{
 		if(!sBuildProgram("Day08", "playground", false))
 		{
 			return	EXIT_FAILURE;
 		}
 	}
-	else
+	else if(bDay08p2)
 	{
 		if(!sBuildProgram("Day08", "playgroundPart2", false))
+		{
+			return	EXIT_FAILURE;
+		}
+	}
+	else if(bDay09p2)
+	{
+		if(!sBuildProgram("Day09", "theaterBSP", false))
 		{
 			return	EXIT_FAILURE;
 		}

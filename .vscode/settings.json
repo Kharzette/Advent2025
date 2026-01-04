@@ -1,0 +1,4 @@
+{
+	"CurrentGame": "/mnt/SkyFather/Games/CurrentGame",
+	"CurrentGameLibs": "${config:CurrentGame}/libs",
+}
